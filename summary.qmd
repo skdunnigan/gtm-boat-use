@@ -1,0 +1,237 @@
+---
+title: "GTM Boat Use"
+author: "SDK"
+format: revealjs
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+#| include: false
+
+
+library(here)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(readxl)
+library(kableExtra)
+```
+
+```{r}
+#| include: false
+
+
+df <- readr::read_csv(here('data', '2023-10_floatplan_responses.csv')) %>% janitor::clean_names()
+```
+
+```{r}
+#| include: false
+
+
+df2 <-
+df %>% 
+  select(date_you_plan_to_launch, vessel_details, who_is_the_primary_captain) %>% 
+  rename(date = date_you_plan_to_launch,
+         vessel = vessel_details,
+         captain = who_is_the_primary_captain) %>% 
+  mutate(date = lubridate::as_date(date, format = "%m/%d/%Y"))
+
+```
+
+```{r}
+op <- readxl::read_xlsx(here('data', '2023-10_operators.xlsx'), sheet = "operators2") %>% janitor::clean_names()
+
+op2 <- 
+op %>% 
+  rename(date = date_you_plan_to_launch) %>% 
+  mutate(date = lubridate::as_date(date)) %>%
+  tidyr::pivot_longer(cols = 2:4,
+                           names_to = 'operatorno', values_to = 'name' 
+                           ) %>% 
+  filter(!is.na(name)) %>% select(-operatorno) %>%
+  distinct()
+
+other <- readxl::read_xlsx(here('data', '2023-10_operators.xlsx'), sheet = "others2") %>% janitor::clean_names()
+
+other2 <-
+  other %>% 
+  rename(date = date_you_plan_to_launch) %>% 
+  mutate(date = lubridate::as_date(date)) %>% 
+  tidyr::pivot_longer(cols = 2:5,
+                      names_to = 'indivno',
+                      values_to = 'name') %>% 
+  filter(!is.na(name)) %>% select(-indivno) %>% 
+  distinct()
+
+
+
+cap2 <- df2 %>% select(date, captain) %>% distinct() %>% rename(name = captain)
+
+names <- bind_rows(op2, other2, cap2) %>% distinct()
+
+rm(op, other, op2, cap2, other2)
+
+```
+
+This summarizes data from the GTMNERR online Float Plan responses. 
+
+-   The online Float Plan has been used as the primary Float Plan since 2018
+
+-   The data was downloaded on 2023-11-02
+
+# Which boat(s) are used the most?
+
+## The UNF boat is used the most
+
+```{r}
+df2 %>% 
+  filter(!is.na(vessel)) %>% 
+  filter(!grepl("Canoe", vessel)) %>% 
+  filter(!grepl("Kayak", vessel)) %>% 
+  group_by(vessel) %>%
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = fct_reorder(vessel, -count, max), y = count)) +
+  geom_col() +
+  geom_text(aes(label = count), hjust = -1, color = "black") +
+  ylim(0,450) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "", 
+       y = "Number of Days in Use")
+```
+
+# Boating Days for Captains*
+
+*When an individual is specifically listed as the primary captain for the day.
+
+## Number of Boat Days Per Captain
+
+```{r}
+df2 %>% 
+  group_by(captain) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = fct_reorder(captain, -count, max), y = count)) +
+  geom_col() +
+  geom_text(aes(label = count), hjust = -1, color = "black") +
+  ylim(0,400) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "", 
+       y = "Number of Boat Days")
+```
+
+## Number of Boat Days Per Captain (this year)
+
+```{r}
+df2 %>% 
+  filter(date >= as_date("2023-01-01")) %>% 
+  group_by(captain) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = fct_reorder(captain, -count, max), y = count)) +
+  geom_col() +
+  geom_text(aes(label = count), hjust = -1, color = "black") +
+  ylim(0,60) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "", 
+       y = "Number of Boat Days")
+```
+
+## Frequency of Boating per Captain (since 2018)
+
+```{r}
+df2 %>% 
+  filter(date >= as_date("2018-01-01")) %>% 
+  filter(!grepl("Canoe", vessel)) %>% 
+  filter(!grepl("Kayak", vessel)) %>% 
+  filter(!grepl("Mike Dickson", captain)) %>%
+  filter(!grepl("Scott Eastman", captain)) %>%
+  filter(!grepl("Rauney Mitchell", captain)) %>%
+  ggplot(aes(x = date, y = captain)) +
+  geom_point() + 
+  scale_x_date(date_breaks = "year", date_labels = "%Y", minor_breaks = "1 month", position = "top") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "",
+       y = "")
+```
+
+## Frequency of Boating per Captain (this year)
+
+```{r}
+df2 %>% 
+  filter(date >= as_date("2023-01-01")) %>% 
+  filter(!grepl("Canoe", vessel)) %>% 
+  filter(!grepl("Kayak", vessel)) %>% 
+  filter(!grepl("Mike Dickson", captain)) %>%
+  filter(!grepl("Scott Eastman", captain)) %>%
+  filter(!grepl("Rauney Mitchell", captain)) %>%
+  ggplot(aes(x = date, y = captain)) +
+  geom_point() + 
+  scale_x_date(date_breaks = "month", date_labels = "%b", position = "top") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "",
+       y = "")
+```
+
+# Boating Days all staff
+
+This includes staff as well as volunteers that have been certified to operate vessels.
+
+## Number of Boat Days Per Staff (since 2018)
+
+```{r}
+names %>% 
+  group_by(name) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = fct_reorder(name, -count, max), y = count)) +
+  geom_col() +
+  geom_text(aes(label = count), hjust = -1, color = "black") +
+  ylim(0,400) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "", 
+       y = "Number of Boat Days")
+```
+
+## Number of Boat Days Per Staff (this year)
+
+```{r}
+names %>% 
+  filter(date >= as_date("2023-01-01")) %>% 
+  group_by(name) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  ggplot(aes(x = fct_reorder(name, -count, max), y = count)) +
+  geom_col() +
+  geom_text(aes(label = count), hjust = -1, color = "black") +
+  ylim(0,50) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "", 
+       y = "Number of Boat Days")
+```
+
+## Frequency of Boating per staff (this year)
+
+```{r}
+names %>% 
+  filter(date >= as_date("2023-01-01")) %>% 
+  ggplot(aes(x = date, y = name)) +
+  geom_point() + 
+  scale_x_date(date_breaks = "month", date_labels = "%b", position = "top") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black")) +
+  labs(x = "",
+       y = "")
+```
